@@ -21,6 +21,8 @@ app.use(cookieParser());
 //set static(public) folder
 app.use("/uploads", express.static(__dirname + "/uploads"));
 
+mongoose.set('strictQuery', false);
+
 //เชื่อมต่อฐานข้อมูล
 const MONGODB_URI = process.env.MONGODB_URI;
 mongoose.connect(MONGODB_URI);
@@ -52,12 +54,12 @@ app.post("/login", async (req, res) => {
   if (userDoc) {
     const isMatchedPassword = bcrypt.compareSync(password, userDoc.password);
     if (isMatchedPassword) {
-      //logged in
-      jwt.sign({ username, id: userDoc }, secret, {}, (err, token) => {
+      //can login
+      jwt.sign({ username, userId: userDoc._id }, secret, {}, (err, token) => {
         if (err) throw err;
-        //Save data in cookie
+        //save data in cookie
         res.cookie("token", token).json({
-          id: userDoc.id,
+          userId: userDoc._id,
           username,
         });
       });
@@ -65,7 +67,7 @@ app.post("/login", async (req, res) => {
       res.status(400).json("wrong credentials");
     }
   } else {
-    res.status(404).json("user not found");
+    res.status(400).json("Wrong credentials");
   }
 });
 
@@ -86,16 +88,24 @@ app.get("/profile", (req, res) => {
   }
 });
 
+app.get("/people", async (req, res) => {
+  const users = await User.find({}, { _id: 1, username: 1 });
+  res.json(users);
+});
+
 //Run Server
 const POST = process.env.POST;
 const server = app.listen(POST, () => {
   console.log("Server is running on http://localhost:" + POST);
 });
 
-//web Socket Server
+
+
+
+//Web Socket Server
 const wss = new ws.WebSocketServer({ server });
 
-wss.on('connection', (connection, req) => {
+wss.on("connection", (connection, req) => {
   const notifyAboutOnlinePeople = () => {
     [...wss.clients].forEach((client) => {
       client.send(
@@ -111,31 +121,27 @@ wss.on('connection', (connection, req) => {
   connection.timer = setInterval(() => {
     connection.ping();
     connection.deadTimer = setTimeout(() => {
-      connection.isAlive = false
+      connection.isAlive = false;
       clearInterval(connection.timer);
       connection.terminate();
       notifyAboutOnlinePeople();
-      console.log('dead');
+      console.log("dead");
     }, 1000);
   }, 5000);
-  connection.on('pong', () => {
-    clearTimeout(connection.deadTimer);
-  });
-
   connection.on("pong", () => {
     clearTimeout(connection.deadTimer);
   });
-  //read username and id from the cookie
-  const cookie = req.headers.cookie;
-  if (cookie) {
-    //token=jdfsjafhuewqdsfsa;
-    //user=sfdgdsgfdgdfgdgdsgdg;
-    //date=123454
-    const tokenCookieString = cookie
+
+  //read username and id from cookie for this connection
+
+  const cookies = req.headers.cookie;
+  if (cookies) {
+    const tokenCookieString = cookies
       .split(";")
       .find((str) => str.startsWith("token="));
     if (tokenCookieString) {
-      const token = tokenCookieString.split("=")(1);
+      //การทำงานของฟังก์ชันสตริง
+      const token = tokenCookieString.split("=")[1];
       if (token) {
         jwt.verify(token, secret, {}, (err, userData) => {
           if (err) throw err;
@@ -146,37 +152,69 @@ wss.on('connection', (connection, req) => {
       }
     }
   }
+
   connection.on("message", async (message) => {
     const messageData = JSON.parse(message.toString());
     const { recipient, sender, text, file } = messageData;
     let filename = null;
     if (file) {
-      const parts = file.name.split(".");
+      const parts = file.name.split('.');
       const ext = parts[parts.length - 1];
       filename = Date.now() + "." + ext;
-      const  path = __dirname + "/uploads/" +filename;
-      const bufferData = Buffer.from(file.data.split(",")[1], 'base64')
-      //อยู่ใน uploads
-      fs.writeFile(path,bufferData, ()=> {
-        console.log("file saved: " + path);
+      const path = __dirname + "/uploads/" + filename;
+      //const bufferData = new Buffer(file.data.split(",")[1], "base64");
+      fs.writeFile(path, file.data.split(",")[1], "base64" , () => {
+        console.log('file saved: ' + path);
       });
     }
-    if(recipient && (text || file )){
-        const messageDoc = await Message.create({
-            sender: connection.userId,
-            recipient,
-            text,
-            file: file ? filename : null,    
-        }); 
-        [...wss.clients].filter(c=>c.userId === recipient).forEa(c=> c.send(JSON.stringify({
-            text,
-            file: file? filename : null,
-            sender: connection.userId,
-            recipient,
-            _id:messageData._id,
-        })))
+    if (recipient && (text || file)) {
+      const messageDoc = await Message.create({
+        sender: connection.userId,
+        recipient,
+        text: text.toString(), 
+        file: file ? filename : null
+      });
+      [...wss.clients]
+        .filter((c) => c.userId === recipient)
+        .forEach((c) =>
+          c.send(
+            JSON.stringify({
+              text,
+              file: file ? filename : null,
+              recipient,
+              sender: connection.userId,
+              _id: messageData._id,
+            })
+          )
+        );
     }
-   
   });
+
+
   notifyAboutOnlinePeople();
 });
+
+//chat api
+const getUserDataFromRequest = (req) => {
+  return new Promise((resolve , reject) => {
+    const token = req.cookies?.token;
+    if(token) {
+      jwt.verify(token, secret,{} , (err,userData) => {
+        if(err) throw err;
+        resolve(userData)
+      })
+    } else {
+      reject("no token")
+    }
+  })
+}
+app.get("/messages/:userId" , async (req,res) => {
+  const {userId} = req.params;
+  const userData = await getUserDataFromRequest(req);
+  const ourUserId = userData.userId;
+  const messages = await Message.find({
+    sender:{$in : [userId , ourUserId]},
+    recipient:{$in : [userId , ourUserId]},
+  }).sort({createAt: 1});
+  res.json(messages);
+})
