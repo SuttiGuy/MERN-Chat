@@ -21,7 +21,7 @@ app.use(cookieParser());
 //set static(public) folder
 app.use("/uploads", express.static(__dirname + "/uploads"));
 
-mongoose.set('strictQuery', false);
+mongoose.set("strictQuery", false);
 
 //เชื่อมต่อฐานข้อมูล
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -99,9 +99,6 @@ const server = app.listen(POST, () => {
   console.log("Server is running on http://localhost:" + POST);
 });
 
-
-
-
 //Web Socket Server
 const wss = new ws.WebSocketServer({ server });
 
@@ -158,21 +155,21 @@ wss.on("connection", (connection, req) => {
     const { recipient, sender, text, file } = messageData;
     let filename = null;
     if (file) {
-      const parts = file.name.split('.');
+      const parts = file.name.split(".");
       const ext = parts[parts.length - 1];
       filename = Date.now() + "." + ext;
       const path = __dirname + "/uploads/" + filename;
       //const bufferData = new Buffer(file.data.split(",")[1], "base64");
-      fs.writeFile(path, file.data.split(",")[1], "base64" , () => {
-        console.log('file saved: ' + path);
+      fs.writeFile(path, file.data.split(",")[1], "base64", () => {
+        console.log("file saved: " + path);
       });
     }
     if (recipient && (text || file)) {
       const messageDoc = await Message.create({
         sender: connection.userId,
         recipient,
-        text: text.toString(), 
-        file: file ? filename : null
+        text: text.toString(),
+        file: file ? filename : null,
       });
       [...wss.clients]
         .filter((c) => c.userId === recipient)
@@ -190,31 +187,30 @@ wss.on("connection", (connection, req) => {
     }
   });
 
-
   notifyAboutOnlinePeople();
 });
 
 //chat api
 const getUserDataFromRequest = (req) => {
-  return new Promise((resolve , reject) => {
+  return new Promise((resolve, reject) => {
     const token = req.cookies?.token;
-    if(token) {
-      jwt.verify(token, secret,{} , (err,userData) => {
-        if(err) throw err;
-        resolve(userData)
-      })
+    if (token) {
+      jwt.verify(token, secret, {}, (err, userData) => {
+        if (err) throw err;
+        resolve(userData);
+      });
     } else {
-      reject("no token")
+      reject("no token");
     }
-  })
-}
-app.get("/messages/:userId" , async (req,res) => {
-  const {userId} = req.params;
+  });
+};
+app.get("/messages/:userId", async (req, res) => {
+  const { userId } = req.params;
   const userData = await getUserDataFromRequest(req);
   const ourUserId = userData.userId;
   const messages = await Message.find({
-    sender:{$in : [userId , ourUserId]},
-    recipient:{$in : [userId , ourUserId]},
-  }).sort({createAt: 1});
+    sender: { $in: [userId, ourUserId] },
+    recipient: { $in: [userId, ourUserId] },
+  }).sort({ createAt: 1 });
   res.json(messages);
-})
+});/* S */

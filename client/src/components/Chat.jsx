@@ -117,7 +117,6 @@ const Chat = () => {
   };
 
  
-
   return (
     <div className="flex h-screen">
       <div className="bg-gray-200 w-1/3 flex flex-col">
@@ -150,7 +149,7 @@ const Chat = () => {
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 20 20"
               fill="currentColor"
-              className="w-3 h-3"
+              className="w-4 h-5"
             >
               <path
                 fillRule="evenodd"
@@ -161,19 +160,19 @@ const Chat = () => {
             {username}
           </span>
           <button
-            className="text-sm bg-blue-200 py-1 px-2 text-gray-500 border rounded-xl"
+            className="text-sm bg-blue-200 py-1 px-2 text-gray-400 border rounded-xl"
             onClick={logout}
           >
             Logout
           </button>
         </div>
       </div>
-      <div className="flex flex-col bg-blue-50 w-2/3 p-2">
+      <div className="flex flex-col bg-blue-100 w-2/3 p-2">
         <div className="flex-grow">
           {!selectedUserId && (
             <div className="flex h-full flex-grow items-center justify-center">
               <div className="text-gray-300">
-                &larr; Select a person from sidebar"_"
+                &larr; เลือกผู้คนแชทกันเถอะ"_"
               </div>
             </div>
           )}
